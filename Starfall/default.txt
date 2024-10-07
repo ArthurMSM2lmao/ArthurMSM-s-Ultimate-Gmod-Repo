@@ -1,0 +1,5 @@
+--@name Untitled
+--@author ArthurMSM #FixTF2
+--@shared
+
+Sound:play(https://raw.githubusercontent.com/ArthurMSM2lmao/Cool-Stuff-Lmao/main/0-2.wav)

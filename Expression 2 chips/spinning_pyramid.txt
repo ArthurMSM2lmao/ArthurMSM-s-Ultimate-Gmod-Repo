@@ -1,0 +1,45 @@
+@name Touchy Cubes
+@inputs 
+@outputs 
+@persist Cubes:array
+@trigger 
+
+# Number of cubes to spawn
+numCubes = 10
+
+# Cube size
+cubeSize = 10
+
+if (first()) {
+    Cubes = array()
+    
+    for (i = 1, numCubes) {
+        local pos = entity():pos() + vec(randvec(-50, 50), randvec(-50, 50), 50 + i * 15)
+        local cube = propSpawn("models/hunter/blocks/cube025x025x025.mdl", pos, ang(0, 0, 0), "models/shiny", vec(1, 1, 1))
+        cube:propFreeze(0) # Unfreeze the prop
+        cube:setGravity(0) # Disable gravity
+        Cubes:pushEntity(cube)
+    end
+}
+
+interval(10) # Set the execution interval to 10 ms for smooth operation
+
+# Check if any cube is being touched
+foreach (index, cube:entity = Cubes) {
+    if (cube:isValid()) {
+        local players = findByClass("player")
+        local isTouched = 0
+
+        foreach (player:entity = players) {
+            if (player:isValid() && player:distance(cube) < (cubeSize + 5)) {
+                isTouched = 1
+                break
+            }
+        }
+
+        if (isTouched) {
+            local direction = randvec(-1, 1):normalized() * 1000 # Random direction with magnitude
+            cube:applyForce(direction)
+        }
+    }
+}

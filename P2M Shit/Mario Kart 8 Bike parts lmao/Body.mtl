@@ -1,0 +1,35 @@
+# Blender 4.1.1 MTL File: 'Mario Kart 8 Bike lmao Separated.blend'
+# www.blender.org
+
+newmtl m_Body
+Ns 20.000006
+Ka 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 1
+map_Kd D:/Downloads/Wii U - Mario Kart 8 - City Tripper/City Tripper/images/bodyb_sct_a_alb.png
+map_Ks D:/Downloads/Wii U - Mario Kart 8 - City Tripper/City Tripper/images/bodyb_sct_a_spm.png
+map_d D:/Downloads/Wii U - Mario Kart 8 - City Tripper/City Tripper/images/bodyb_sct_a_alb.png
+map_Bump -bm 0.300000 D:/Downloads/Wii U - Mario Kart 8 - City Tripper/City Tripper/images/bodyb_sct_nrm.png
+
+newmtl m_Body.002
+Ns 20.000006
+Ka 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 1
+map_Kd D:/Downloads/Wii U - Mario Kart 8 - City Tripper/City Tripper/images/bodyb_sct_a_alb.png
+map_Ks D:/Downloads/Wii U - Mario Kart 8 - City Tripper/City Tripper/images/bodyb_sct_a_spm.png
+map_d D:/Downloads/Wii U - Mario Kart 8 - City Tripper/City Tripper/images/bodyb_sct_a_alb.png
+map_Bump -bm 0.300000 D:/Downloads/Wii U - Mario Kart 8 - City Tripper/City Tripper/images/bodyb_sct_nrm.png
+
+newmtl m_Body.003
+Ns 20.000006
+Ka 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 1
+map_Kd D:/Downloads/Wii U - Mario Kart 8 - City Tripper/City Tripper/images/bodyb_sct_a_alb.png
+map_Ks D:/Downloads/Wii U - Mario Kart 8 - City Tripper/City Tripper/images/bodyb_sct_a_spm.png
+map_d D:/Downloads/Wii U - Mario Kart 8 - City Tripper/City Tripper/images/bodyb_sct_a_alb.png
+map_Bump -bm 0.300000 D:/Downloads/Wii U - Mario Kart 8 - City Tripper/City Tripper/images/bodyb_sct_nrm.png

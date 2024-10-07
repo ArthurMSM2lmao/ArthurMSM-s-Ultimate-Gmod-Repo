@@ -1,0 +1,183 @@
+@name GenericDrive V3
+@inputs [Start W A S D Space RPM KPH]:number Engine:entity
+@outputs [Active Throttle Gear GearL GearR GearT Clutch ClutchL ClutchR WeldLatchL WeldLatchR]:number 
+@outputs [Force]:vector [Length Constant Damping Ops Us]:number
+@persist [Throttle Gear GearL GearR Clutch ClutchL ClutchR]:number [StartSound StopSound]:string
+@persist [TransmissionType ForwardGears ReverseGears MinGearingSpeed OverturnSpeed UseWeldLatch TurnPower BrakePower MaxRPM MinRPM RPM]:number
+@trigger Start W A S D Space
+ 
+#------------------------------------ E2 made by TwistedTail ----------------------------------------#
+#----------------------------------------- Version 3.5 ----------------------------------------------#
+#------------------------ Updates for the E2: https://pastebin.com/QAkVtrTg -------------------------#
+ 
+Ops = floor(ops())
+Us  = floor(cpuUsage() * 1000000)
+ 
+if(changed(Active)){
+ 
+    TransmissionType = 0      #Type 0 is a basic autogearing car setup. Uses Gear and Clutch.
+                                #Type 1 is a transaxial dual clutch setup. Uses Gear, ClutchL, ClutchR and optionally WeldLatchL and WeldLatchR.
+                                #Type 2 is a dual gearbox setup. Uses GearL, GearR, ClutchL, ClutchR and optionally WeldLatchL and WeldLatchR.
+                                #Type 3 is a dual clutch with single transfer setup. Uses Gear, GearT, ClutchL, ClutchR and optionally WeldLatchL and WeldLatchR.
+                                #Type 4 is a single gearbox with double transfer setup. Uses Gear, GearL, GearR, ClutchL, ClutchR and optionally WeldLatchL and WeldLatchR.
+    #Gears setup
+    ForwardGears     = 7
+    ReverseGears     = 1
+    MinGearingSpeed  = 1      #Set this as a bit less than the max speed you can get with the tank on the first gear (Maybe 1-2km/h less)
+    OverturnSpeed    = 20       #Speed in km/h at which you start to overturn. Don't modify it if you don't use weld latches to turn.
+    #Braking setup
+    UseWeldLatch     = 0        #If you want to use weld latches to turn and brake at low speeds set this to 1
+    TurnPower        = 6        #Don't exceed 20. Seriously.
+    BrakePower       = 100       #Don't exceed 20. Seriously.
+    #Hydro setup (optional)
+    Length           = 30       #Hydraulic length
+    Constant         = 50000    #Hydraulic constant
+    Damping          = 15000    #Hydraulic damping
+    #Applyforce setup (optional)
+    Force            = vec(0,0,-18000)     #Applyforce vector
+    #Startup setup
+    StartSound       = "acf_extra/vehiclefx/engines/coh/m4_up.wav"            #Sound played when you turn on the engine
+    StopSound        = "acf_extra/vehiclefx/engines/coh/m4_end.wav"           #Sound played when you turn off the engine
+    #Gearing setup
+    MaxRPM           = Engine:acfPowerbandMax()*0.9                           #RPM needed to gear up
+    MinRPM           = (Engine:acfPowerbandMin()*3 + Engine:acfIdleRPM())/4   #RPM needed to gear down
+ 
+    #---------You shouldn't touch anything under this----------#
+ 
+    Throttle = Gear = GearL = GearR = GearT = 0
+    WeldLatchL = WeldLatchR = Clutch = ClutchL = ClutchR = !Active
+}
+ 
+if(Active){ 
+    interval(150)
+    
+    Throttle = (W | A | S | D) * 100 #Oh wow bro super complex throttle equation DO NOT STEAL
+    
+    switch (TransmissionType){
+        
+        case 0,                                                             ##SIMPLE CAR TRANSMISSION##
+            Power  = UseWeldLatch ? 1 : BrakePower
+            Clutch = Space * Power
+            
+            if (W | S){
+                MaxGear = W ? ForwardGears : ForwardGears + ReverseGears
+                MinGear = W ? 1 : 1 + ForwardGears
+                
+                if (KPH < MinGearingSpeed | Gear < MinGear){ Gear = MinGear }
+                elseif (Gear < MaxGear & RPM >= MaxRPM){ Gear++ }
+                elseif (Gear > MinGear & RPM <= MinRPM){ Gear-- }
+            }elseif (!Throttle & KPH <= MinGearingSpeed & ->KPH){
+                Gear   = 1
+                Clutch = Power
+            }else{
+                Gear = 1
+            }
+        break
+        case 1,                                                             ##SINGLE GEARBOX, DUAL CLUTCH##
+            SelectPower = (A | D) ? TurnPower : BrakePower
+            Power       = UseWeldLatch & KPH <= OverturnSpeed ? 1 : SelectPower
+            ClutchL     = (Space | A) * Power
+            ClutchR     = (Space | D) * Power
+            WeldLatchL  = UseWeldLatch * KPH <= OverturnSpeed * (Space | A)
+            WeldLatchR  = UseWeldLatch * KPH <= OverturnSpeed * (Space | D)
+            
+            if (W | S){
+                MaxGear = W ? ForwardGears : ForwardGears + ReverseGears
+                MinGear = W ? 1 : 1 + ForwardGears
+                
+                if (KPH < MinGearingSpeed | Gear < MinGear){ Gear = MinGear }
+                elseif (Gear < MaxGear & RPM >= MaxRPM){ Gear++ }
+                elseif (Gear > MinGear & RPM <= MinRPM){ Gear-- }
+            }elseif (!Throttle & KPH <= MinGearingSpeed & ->KPH){
+                Gear       = 1
+                ClutchL    = ClutchR = Power
+                WeldLatchL = WeldLatchR = UseWeldLatch
+            }else{
+                Gear = 1
+            }
+        break
+        case 2,                                                             ##DOUBLE GEARBOX, NO TRANSFERS##
+            SelectPower = (A | D) ? TurnPower : BrakePower
+            Power       = UseWeldLatch & KPH <= OverturnSpeed ? 1 : SelectPower
+        
+            if (W | S){
+                MaxGear    = W ? ForwardGears : ForwardGears + ReverseGears
+                MinGear    = W ? 1 : 1 + ForwardGears
+                ClutchL    = (Space | A) * Power
+                ClutchR    = (Space | D) * Power
+                WeldLatchL = UseWeldLatch * KPH <= OverturnSpeed * (Space | A)
+                WeldLatchR = UseWeldLatch * KPH <= OverturnSpeed * (Space | D)
+                
+                if (KPH < MinGearingSpeed | Gear < MinGear){ GearL = GearR = MinGear }
+                elseif (GearL < MaxGear & RPM >= MaxRPM){ GearL++ GearR++ }
+                elseif (GearL > MinGear & RPM <= MinRPM){ GearL-- GearR-- }
+            }elseif (!Throttle & KPH <= MinGearingSpeed & ->KPH){
+                GearL      = GearR = 1
+                ClutchL    = ClutchR = Power
+                WeldLatchL = WeldLatchR = UseWeldLatch
+            }else{
+                GearL      = 1 + ForwardGears * A
+                GearR      = 1 + ForwardGears * D
+                ClutchL    = ClutchR = Space * Power
+                WeldLatchL = WeldLatchR = UseWeldLatch * Space
+            }
+        break
+        case 3,                                                             ##DUALCLUTCH WITH SINGLE TRANSFER#
+            SelectPower = (A | D) ? TurnPower : BrakePower
+            Power = UseWeldLatch & KPH <= OverturnSpeed ? 1 : SelectPower
+            ClutchL = (Space | A) * Power
+            ClutchR = (Space | D) * Power
+            WeldLatchL = UseWeldLatch * KPH <= OverturnSpeed * (Space | A)
+            WeldLatchR = UseWeldLatch * KPH <= OverturnSpeed * (Space | D)
+            GearT = 1 + S
+            
+            if (W | S){
+                MaxGear = W ? ForwardGears : ReverseGears
+                
+                if (KPH < MinGearingSpeed){ Gear = 1 }
+                elseif (Gear < MaxGear & RPM >= MaxRPM){ Gear++ }
+                elseif (Gear > 1 & RPM <= MinRPM){ Gear-- }
+            }elseif (!Throttle & KPH <= MinGearingSpeed & ->KPH){
+                Gear       = 1
+                ClutchL    = ClutchR = Power
+                WeldLatchL = WeldLatchR = UseWeldLatch
+            }else{
+                Gear = 1
+            }
+        break
+        case 4,                                                             ##PIVOT STEERING#
+            SelectPower = (A | D) ? TurnPower : BrakePower
+            Power       = UseWeldLatch & KPH <= OverturnSpeed ? 1 : SelectPower
+            
+            if (W | S){
+                MaxGear    = W ? ForwardGears : ReverseGears
+                GearL      = GearR = 1 + S
+                ClutchL    = (A | Space) * Power
+                ClutchR    = (D | Space) * Power  
+                WeldLatchL = UseWeldLatch * KPH <= OverturnSpeed * (Space | A)
+                WeldLatchR = UseWeldLatch * KPH <= OverturnSpeed * (Space | D) 
+                
+                if (KPH <= MinGearingSpeed){ Gear = 1 }
+                elseif (Gear < MaxGear & RPM >= MaxRPM){ Gear++ }
+                elseif (Gear > 1 & RPM <= MinRPM){ Gear-- }
+            }elseif (!Throttle & KPH <= MinGearingSpeed & ->KPH){
+                Gear    = GearL = GearR = 1
+                ClutchL = ClutchR = Power
+            }else{
+                Gear       = 1
+                GearL      = 1 + A
+                GearR      = 1 + D
+                ClutchL    = ClutchR = Space * Power
+                WeldLatchL = WeldLatchR = UseWeldLatch * Space
+            }
+        break
+    }
+}
+ 
+#Version without starter: https://pastebin.com/RMddmPFE
+if (changed(Start) & Start){                    
+    Sel    = Active ? StopSound : StartSound      
+    Active = !Active
+    
+    Engine:soundPlay(1, soundDuration(Sel), Sel)
+}

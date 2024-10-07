@@ -1,0 +1,10 @@
+@name Coke blocks
+@inputs 
+@outputs 
+@persist 
+@strict
+
+(setColor 255, 0, 0
+if time = 20 
+break
+

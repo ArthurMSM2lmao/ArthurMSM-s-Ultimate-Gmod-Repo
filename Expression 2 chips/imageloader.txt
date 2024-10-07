@@ -1,0 +1,25 @@
+@name Player GPS Tracker
+@inputs
+@outputs ScreenText:string
+@persist Players:array
+@trigger 
+
+interval(1000) # Update every second
+
+if (first()) {
+    Players = array()
+}
+
+# Clear the screen text
+ScreenText = ""
+
+# Loop through all players and get their positions
+for (I = 1, numberOfPlayers()) {
+    local Ply = entity(I)
+    if (Ply:isPlayer()) {
+        local Name = Ply:name()
+        local Pos = Ply:pos()
+        local PosStr = "X: " + round(Pos:x(), 2) + " Y: " + round(Pos:y(), 2) + " Z: " + round(Pos:z(), 2)
+        ScreenText += Name + ": " + PosStr + "\n"
+    }
+}

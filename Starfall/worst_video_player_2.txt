@@ -1,0 +1,302 @@
+--@name Worst Video Player 2
+--@author StyledStrike
+--@client
+
+local URLS = {
+    DATA = "https://dl.dropboxusercontent.com/scl/fi/ixuqpditrq9v32lbyylau/idk-lmao.txt?rlkey=ls1gt19shspksh10hmeicsjv8&st=cxx6mvs5&dl=1",
+    AUDIO = "https://dl.dropboxusercontent.com/scl/fi/ucecg199lcx8mnl1tvwns/sfv_badapple.ogg?rlkey=xswl4b6cj9106xhswlbiyrhp6&dl=1",
+}
+
+--URLS.DATA = ""
+--URLS.AUDIO = nil
+
+local perms = {
+    granted = false
+}
+
+function perms:Check( acceptedCallback )
+    local list = { "http.get", "bass.loadURL" }
+    local params = { URLS.DATA, URLS.AUDIO }
+    local passed = true
+
+    for i, name in ipairs( list ) do
+        if not hasPermission( name, params[i] ) then
+            passed = false
+            break
+        end
+    end
+
+    if passed then
+        self.granted = true
+        acceptedCallback()
+    else
+        setupPermissionRequest( list, "This chip require these permissions to work.", true )
+
+        hook.add( "permissionrequest", "perms.Check", function()
+            self:Check( acceptedCallback )
+        end )
+    end
+end
+
+local data = {
+    frameCount = 0,
+    fps = 0,
+    width = 0,
+    height = 0,
+
+    -- frame count + fps + width + height
+    headerSize = 2 + 2 + 2 + 2
+}
+
+local playback = {
+    volume = 0.15,
+    isPlaying = false,
+    frame = 0,
+
+    frameLen = 1,
+    startTime = 0,
+
+    pixelW = 1,
+    pixelH = 1,
+}
+
+local IsValid = isValid
+local Floor = math.floor
+
+local entChip = chip()
+
+function playback:Load( binaryData, audioURL )
+    self.stream = bit.stringstream( binaryData, 1, "big" )
+
+    data.frameCount = self.stream:readUInt16()
+    data.fps = self.stream:readUInt16()
+    data.width = self.stream:readUInt16()
+    data.height = self.stream:readUInt16()
+
+    -- Calculate how big the video pixels are relative to a 1024x1024 render target
+    self.pixelW, self.pixelH = math.round( 1024 / data.width ), math.round( 1024 / data.height )
+
+    -- Calculate how long a frame lasts for (in seconds)
+    self.frameLen = 1 / data.fps
+
+    if not audioURL then
+        self:Play()
+        return
+    end
+
+    -- This is required if not using the "3d" flag
+    -- enableHud( nil, true )
+
+    bass.loadURL( audioURL, "3d noplay noblock", function( snd, _, err )
+        if not IsValid( snd ) then
+            print( err )
+            return
+        end
+
+        snd:setPos( entChip:getPos() )
+        snd:setFade( 300, 600 )
+        snd:setVolume( self.volume )
+
+        self.channel = snd
+        self:Play()
+    end )
+end
+
+--[[
+    A frame contains a series of chunks.
+
+    Chunks are 8-bit long values, where
+    the first 2 bits represent the color, and the
+    last 6 bits count how many times that color repeats.
+
+    The function below will count how many times the same color
+    repeats, clump them together into rectangles, and group
+    those rectangles by color into the `rectangles` table.
+]]
+do
+    local Band = bit.band
+    local Brshift = bit.rshift
+    local Fmod = math.fmod
+
+    -- Count and group rectangles per color.
+    -- Note that the color 0 (black) isn't counted
+    -- since the RT is cleared with it already.
+    local count = {}
+    local rectangles = {}
+    local rectCount
+
+    local function AddRect( x, y, width, color )
+        rectCount = count[color] + 1
+        count[color] = rectCount
+        rectangles[color][rectCount] = { x, y, width }
+    end
+
+    function playback:AdvanceFrame()
+        count[1] = 0
+        count[2] = 0
+        count[3] = 0
+
+        rectangles[1] = {}
+        rectangles[2] = {}
+        rectangles[3] = {}
+
+        local w, h = data.width, data.height
+        local max = ( w * h ) - 1
+
+        -- current pixel info
+        local i, x, y = 0
+        local chunk, color, reps
+
+        while i <= max do
+            chunk = self.stream:readUInt8()
+            color = Brshift( chunk, 6 ) -- color at first 2 bits
+            reps = Band( chunk, 63 ) + 1 -- repeat count at the last 6 bits (63 = 0b00111111)
+
+            if color > 0 then
+                x, y = Fmod( i, w ), Floor( i / w )
+                AddRect( x, y, reps, color )
+
+                -- if the color extends to the next line...
+                if x + reps > w then
+                    AddRect( 0, y + 1, reps - ( w - x ), color )
+                end
+            end
+
+            i = i + reps
+        end
+
+        self.rectangles = rectangles
+    end
+end
+
+local RealTime = timer.realtime
+
+function playback:Play()
+    -- "1 +" here is not a byte offset, its just that StringStream
+    -- counts byte indexes starting from 1, like lua arrays
+    self.stream:seek( 1 + data.headerSize )
+
+    self.frame = 0
+    self.lastFrame = 0
+    self.isPlaying = true
+    self.startTime = RealTime() - self.frameLen
+
+    if IsValid( self.channel ) then
+        self.channel:setTime( 0.0, false )
+        self.channel:play()
+    end
+end
+
+function playback:Pause()
+    self.isPlaying = false
+
+    if IsValid( self.channel ) then
+        self.channel:pause()
+    end
+end
+
+function playback:Think()
+    if not self.isPlaying then return end
+
+    local time = RealTime() - self.startTime
+    local frame = Floor( time / self.frameLen )
+
+    if frame ~= self.lastFrame then
+        -- if we still haven't reached the end of the video...
+        if frame <= data.frameCount then
+            -- play all the frames we missed since the last Think
+            for _ = 1, frame - self.lastFrame do
+                self:AdvanceFrame()
+            end
+        else
+            -- loop back to the start
+            self:Play()
+        end
+
+        self.lastFrame = frame
+    end
+
+    if IsValid( self.channel ) then
+        self.channel:setPos( entChip:getPos() )
+    end
+end
+
+do
+    local colors = {}
+
+    for i = 0, 3 do
+        local v = ( i / 3 ) * 255
+        colors[i] = Color( v, v, v, 255 )
+    end
+
+    local SetColor = render.setColor
+    local DrawRect = render.drawRectFast
+
+    function playback:RenderFrame()
+        if not self.rectangles then return end
+
+        render.selectRenderTarget( "canvas" )
+        render.clear( colors[0], true )
+
+        local pw, ph = self.pixelW, self.pixelH
+
+        for color, rects in ipairs( self.rectangles ) do
+            SetColor( colors[color] )
+
+            for _, r in ipairs( rects ) do
+                DrawRect( r[1] * pw, r[2] * ph, r[3] * pw, ph )
+            end
+        end
+
+        self.rectangles = nil
+    end
+end
+
+----------
+
+perms:Check( function()
+    render.createRenderTarget( "canvas" )
+
+    hook.add( "think", "playback.Think", function()
+        playback:Think()
+    end )
+
+    hook.add( "renderoffscreen", "playback.RenderFrame", function()
+        playback:RenderFrame()
+    end )
+
+    http.get( URLS.DATA, function( body, _, _, code )
+        code = tostring( code )
+
+        if code:sub( 1, 1 ) ~= "2" then
+            print( "Non-200 status code:", code )
+            return
+        end
+
+        playback:Load( body, URLS.AUDIO )
+
+    end, function( reason )
+        print( reason )
+    end )
+end )
+
+hook.add( "render", "playback.RenderRT", function()
+    local w, h = render.getResolution()
+
+    if not perms.granted then
+        local x, y = w * 0.5, h * 0.5
+        local alpha = 0.5 + math.abs( math.sin( RealTime() * 2 ) ) * 0.5
+
+        render.setFont( "DermaLarge" )
+        render.setColor( Color( 219, 208, 111, 255 * alpha ) )
+        render.drawText( x, y, "This chip needs your permission to run!\nPress E on this screen.", 1 )
+
+        return
+    end
+
+    render.setFilterMag( TEXFILTER.POINT )
+    render.setRenderTargetTexture( "canvas" )
+    render.drawTexturedRectUVFast( 0, 0, w, h, 0, 0, 1, 1, true )
+end )
+
+

@@ -1,0 +1,5 @@
+"VertexLitGeneric"
+{
+	"$basetexture" "models/ArthurMSM/1000THREarthMover/Earthmover_Body"
+	"$normalmap" "models/ArthurMSM/1000THREarthMover/Earthmover_N"
+}
